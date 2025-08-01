@@ -8,7 +8,7 @@ export default defineConfig({
     port: 3000,
     open: true
   },
-  base: '/cohort-analysis-tool/', // Replace with your repo name
+  base: '/YOUR-REPO-NAME/', // Replace with your actual GitHub repo name
   build: {
     outDir: 'dist'
   }
