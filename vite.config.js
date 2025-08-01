@@ -7,5 +7,9 @@ export default defineConfig({
   server: {
     port: 3000,
     open: true
+  },
+  base: '/cohort-analysis-tool/', // Replace with your repo name
+  build: {
+    outDir: 'dist'
   }
 })
