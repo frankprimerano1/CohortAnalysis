@@ -8,7 +8,7 @@ export default defineConfig({
     port: 3000,
     open: true
   },
-  base: '/YOUR-REPO-NAME/', // Replace with your actual GitHub repo name
+  base: '/CohortAnalysis/', // Your GitHub repo name
   build: {
     outDir: 'dist'
   }
