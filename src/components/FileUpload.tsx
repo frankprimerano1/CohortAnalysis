@@ -1,13 +1,14 @@
 import React, { useRef, useState } from 'react';
-import { parseCSV, generateSampleCSV } from '../utils/csvParser';
-import { CustomerData } from '../types';
+import { parseSmartCSV, generateSampleCSV, generateSampleTransactionCSV } from '../utils/csvParser';
+import { CustomerData, TransactionData } from '../types';
 
 interface FileUploadProps {
-  onDataLoad: (data: CustomerData[]) => void;
+  onDataLoad?: (data: CustomerData[]) => void;
+  onSmartDataLoad?: (customerData: CustomerData[], transactionData: TransactionData[], isTransactionFormat: boolean) => void;
   onError: (errors: string[]) => void;
 }
 
-const FileUpload: React.FC<FileUploadProps> = ({ onDataLoad, onError }) => {
+const FileUpload: React.FC<FileUploadProps> = ({ onDataLoad, onSmartDataLoad, onError }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [fileName, setFileName] = useState<string>('');
@@ -25,14 +26,21 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoad, onError }) => {
     setFileName(file.name);
 
     try {
-      const result = await parseCSV(file);
+      const result = await parseSmartCSV(file);
       
       if (result.errors.length > 0) {
         onError(result.errors);
       }
       
-      if (result.data.length > 0) {
-        onDataLoad(result.data);
+      const hasData = result.customerData.length > 0 || result.transactionData.length > 0;
+      
+      if (hasData) {
+        if (onSmartDataLoad) {
+          onSmartDataLoad(result.customerData, result.transactionData, result.isTransactionFormat);
+        } else if (onDataLoad && result.customerData.length > 0) {
+          // Fallback for legacy components
+          onDataLoad(result.customerData);
+        }
       } else {
         onError(['No valid data found in the CSV file']);
       }
@@ -43,13 +51,15 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoad, onError }) => {
     }
   };
 
-  const handleDownloadSample = () => {
-    const csvContent = generateSampleCSV();
+  const handleDownloadSample = (type: 'legacy' | 'transaction' = 'legacy') => {
+    const csvContent = type === 'transaction' ? generateSampleTransactionCSV() : generateSampleCSV();
+    const fileName = type === 'transaction' ? 'sample-transaction-data.csv' : 'sample-customer-data.csv';
+    
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'sample-customer-data.csv';
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -71,7 +81,7 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoad, onError }) => {
               Upload Customer Data
             </h3>
             <p className="text-sm text-gray-500 mb-4">
-              Upload a CSV file with Account ID, Close Date, and ARR columns
+              Upload CSV with customer data (legacy format) or transaction history (for real cohort analysis)
             </p>
             
             {fileName && (
@@ -90,12 +100,21 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoad, onError }) => {
               {isLoading ? 'Processing...' : 'Choose CSV File'}
             </button>
             
-            <button
-              onClick={handleDownloadSample}
-              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-md transition-colors"
-            >
-              Download Sample CSV
-            </button>
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                onClick={() => handleDownloadSample('transaction')}
+                className="w-full bg-green-100 hover:bg-green-200 text-green-700 font-medium py-2 px-4 rounded-md transition-colors text-sm"
+              >
+                📈 Download Transaction Sample (Real Analysis)
+              </button>
+              
+              <button
+                onClick={() => handleDownloadSample('legacy')}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-md transition-colors text-sm"
+              >
+                📄 Download Legacy Sample (Simulated)
+              </button>
+            </div>
           </div>
 
           <input
@@ -108,13 +127,30 @@ const FileUpload: React.FC<FileUploadProps> = ({ onDataLoad, onError }) => {
         </div>
       </div>
       
-      <div className="mt-4 text-xs text-gray-500">
-        <p>Expected CSV columns (case insensitive):</p>
-        <ul className="list-disc list-inside mt-1 space-y-1">
-          <li><strong>Account ID:</strong> Customer identifier</li>
-          <li><strong>Close Date:</strong> Customer acquisition date</li>
-          <li><strong>ARR:</strong> Annual Recurring Revenue</li>
-        </ul>
+      <div className="mt-4 text-xs text-gray-500 space-y-3">
+        <div>
+          <p className="font-medium text-green-700">📈 Transaction Format (Real Analysis):</p>
+          <ul className="list-disc list-inside mt-1 space-y-1 ml-2">
+            <li><strong>Account ID:</strong> Customer identifier</li>
+            <li><strong>Transaction Date:</strong> Date of the transaction</li>
+            <li><strong>ARR:</strong> Annual Recurring Revenue amount</li>
+            <li><strong>Transaction Type:</strong> new, expansion, contraction, churn, renewal</li>
+            <li><strong>Previous ARR:</strong> (Optional) Previous ARR value</li>
+          </ul>
+        </div>
+        
+        <div>
+          <p className="font-medium text-gray-700">📄 Legacy Format (Simulated):</p>
+          <ul className="list-disc list-inside mt-1 space-y-1 ml-2">
+            <li><strong>Account ID:</strong> Customer identifier</li>
+            <li><strong>Close Date:</strong> Customer acquisition date</li>
+            <li><strong>ARR:</strong> Annual Recurring Revenue</li>
+          </ul>
+        </div>
+        
+        <p className="text-gray-400 italic">
+          The app automatically detects which format you're using!
+        </p>
       </div>
     </div>
   );

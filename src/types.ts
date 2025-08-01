@@ -1,7 +1,27 @@
+// Transaction-based data structure for real cohort analysis
+export interface TransactionData {
+  accountId: string;
+  transactionDate: string; // ISO date string
+  arr: number;
+  transactionType: 'new' | 'expansion' | 'contraction' | 'churn' | 'renewal';
+  previousARR?: number; // For calculating changes
+}
+
+// Legacy interface for backward compatibility
 export interface CustomerData {
   accountId: string;
   closeDate: string;
   arr: number;
+}
+
+// Enhanced customer summary for analysis
+export interface CustomerSummary {
+  accountId: string;
+  firstTransactionDate: string;
+  transactions: TransactionData[];
+  currentARR: number;
+  isActive: boolean;
+  cohortName: string;
 }
 
 export interface CohortData {

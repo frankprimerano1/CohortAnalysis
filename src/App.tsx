@@ -3,12 +3,14 @@ import FileUpload from './components/FileUpload';
 import CohortHeatmap from './components/CohortHeatmap';
 import Settings from './components/Settings';
 import AnalysisSettings from './components/AnalysisSettings';
-import { CustomerData, CohortAnalysis, CohortType, HeatmapCell, AnalysisSettings as AnalysisSettingsType } from './types';
-import { calculateCohortAnalysis } from './utils/cohortAnalysis';
+import { CustomerData, TransactionData, CohortAnalysis, CohortType, HeatmapCell, AnalysisSettings as AnalysisSettingsType } from './types';
+import { calculateCohortAnalysis, calculateRealCohortAnalysis } from './utils/cohortAnalysis';
 import { downloadCSV, downloadPNG } from './utils/downloadUtils';
 
 const App: React.FC = () => {
   const [customerData, setCustomerData] = useState<CustomerData[]>([]);
+  const [transactionData, setTransactionData] = useState<TransactionData[]>([]);
+  const [isTransactionFormat, setIsTransactionFormat] = useState<boolean>(false);
   const [cohortAnalysis, setCohortAnalysis] = useState<CohortAnalysis | null>(null);
   const [cohortType, setCohortType] = useState<CohortType>('quarter');
   const [analysisSettings, setAnalysisSettings] = useState<AnalysisSettingsType>({
@@ -19,34 +21,57 @@ const App: React.FC = () => {
   const [hoveredCell, setHoveredCell] = useState<HeatmapCell | null>(null);
   const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  const handleDataLoad = useCallback((data: CustomerData[]) => {
-    setCustomerData(data);
+  // Updated function to handle smart CSV parsing results
+  const handleSmartDataLoad = useCallback((
+    customerData: CustomerData[], 
+    transactionData: TransactionData[], 
+    isTransaction: boolean
+  ) => {
+    setCustomerData(customerData);
+    setTransactionData(transactionData);
+    setIsTransactionFormat(isTransaction);
     setErrors([]);
     
-    // Calculate cohort analysis
-    const analysis = calculateCohortAnalysis(data, cohortType, analysisSettings);
+    // Calculate cohort analysis using appropriate method
+    let analysis: CohortAnalysis;
+    if (isTransaction && transactionData.length > 0) {
+      analysis = calculateRealCohortAnalysis(transactionData, cohortType, analysisSettings);
+    } else {
+      analysis = calculateCohortAnalysis(customerData, cohortType, analysisSettings);
+    }
     setCohortAnalysis(analysis);
   }, [cohortType, analysisSettings]);
+
+  // Legacy function for backward compatibility
+  const handleDataLoad = useCallback((data: CustomerData[]) => {
+    handleSmartDataLoad(data, [], false);
+  }, [handleSmartDataLoad]);
 
   const handleCohortTypeChange = useCallback((newCohortType: CohortType) => {
     setCohortType(newCohortType);
     
     // Recalculate analysis if we have data
-    if (customerData.length > 0) {
+    if (isTransactionFormat && transactionData.length > 0) {
+      const analysis = calculateRealCohortAnalysis(transactionData, newCohortType, analysisSettings);
+      setCohortAnalysis(analysis);
+    } else if (customerData.length > 0) {
       const analysis = calculateCohortAnalysis(customerData, newCohortType, analysisSettings);
       setCohortAnalysis(analysis);
     }
-  }, [customerData, analysisSettings]);
+  }, [customerData, transactionData, isTransactionFormat, analysisSettings]);
 
   const handleAnalysisSettingsChange = useCallback((newSettings: AnalysisSettingsType) => {
     setAnalysisSettings(newSettings);
     
     // Recalculate analysis if we have data
-    if (customerData.length > 0) {
+    if (isTransactionFormat && transactionData.length > 0) {
+      const analysis = calculateRealCohortAnalysis(transactionData, cohortType, newSettings);
+      setCohortAnalysis(analysis);
+    } else if (customerData.length > 0) {
       const analysis = calculateCohortAnalysis(customerData, cohortType, newSettings);
       setCohortAnalysis(analysis);
     }
-  }, [customerData, cohortType]);
+  }, [customerData, transactionData, isTransactionFormat, cohortType]);
 
   const handleError = useCallback((newErrors: string[]) => {
     setErrors(newErrors);
@@ -120,7 +145,11 @@ const App: React.FC = () => {
           {/* File Upload Section */}
           {!cohortAnalysis && (
             <div className="flex justify-center">
-              <FileUpload onDataLoad={handleDataLoad} onError={handleError} />
+              <FileUpload 
+            onDataLoad={handleDataLoad} 
+            onSmartDataLoad={handleSmartDataLoad}
+            onError={handleError} 
+          />
             </div>
           )}
 
@@ -179,6 +208,34 @@ const App: React.FC = () => {
                       {cohortAnalysis.maxMonths}
                     </div>
                     <div className="text-sm text-orange-600">Months Tracked</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Analysis Type Indicator */}
+              <div className="mb-4 p-3 rounded-md border-l-4 border-r-4" style={{
+                backgroundColor: isTransactionFormat ? '#f0fdf4' : '#fef3c7',
+                borderLeftColor: isTransactionFormat ? '#22c55e' : '#f59e0b',
+                borderRightColor: isTransactionFormat ? '#22c55e' : '#f59e0b'
+              }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">
+                    {isTransactionFormat ? '📈' : '🧮'}
+                  </span>
+                  <div>
+                    <p className="font-medium text-sm" style={{
+                      color: isTransactionFormat ? '#15803d' : '#d97706'
+                    }}>
+                      {isTransactionFormat ? 'Real Cohort Analysis' : 'Simulated Analysis'}
+                    </p>
+                    <p className="text-xs" style={{
+                      color: isTransactionFormat ? '#16a34a' : '#ea580c'
+                    }}>
+                      {isTransactionFormat 
+                        ? 'Using transaction history for accurate NRR calculations'
+                        : 'Using mathematical simulation for demonstration purposes'
+                      }
+                    </p>
                   </div>
                 </div>
               </div>
@@ -245,6 +302,8 @@ const App: React.FC = () => {
                 <button
                   onClick={() => {
                     setCustomerData([]);
+                    setTransactionData([]);
+                    setIsTransactionFormat(false);
                     setCohortAnalysis(null);
                     setErrors([]);
                     setHoveredCell(null);
